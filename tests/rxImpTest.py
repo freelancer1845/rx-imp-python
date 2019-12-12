@@ -1,7 +1,7 @@
 import unittest
 from rximp import RxImp
-from rx import Observable
-from rx.operators import map
+from rx import Observable, of, interval
+from rx.operators import map, do, take, finally_action
 from rx.subject import Subject
 from rx.testing.mockobserver import MockObserver
 import json
@@ -38,19 +38,38 @@ class RxImpTest(unittest.TestCase):
     def test_simpleConnect(self):
         mockObs = MockObserver(scheduler=scheduler)
 
-        def handler(args, subj: Subject):
-            subj.on_next(args)
-            subj.on_completed()
+        def handler(args):
+            return of(args)
 
-        self.rxImp.registerCall(RxImpTest.TEST_TOPIC, handler)
+        self.rxImp.registerCall(RxImpTest.TEST_TOPIC, lambda x: handler(x))
 
         self.outSubject.subscribe(self.inSubject)
 
         self.rxImp.observableCall(RxImpTest.TEST_TOPIC, 1).subscribe(mockObs)
         time.sleep(0.5)
-        print(mockObs.messages)
         self.assertTrue(len(mockObs.messages) == 2)
         self.assertTrue(mockObs.messages[0].value.value is 1)
+
+    def test_signalsComplete(self):
+        mockObs = MockObserver(scheduler=scheduler)
+        mockObs2 = MockObserver(scheduler=scheduler)
+        subject = Subject()
+        subject.subscribe(mockObs2)
+
+        def handler(args):
+            return interval(0.01).pipe(take(10), finally_action(lambda: subject.on_completed()))
+
+        self.rxImp.registerCall(RxImpTest.TEST_TOPIC, lambda x: handler(x))
+
+        self.outSubject.subscribe(self.inSubject)
+
+        self.rxImp.observableCall(RxImpTest.TEST_TOPIC, 1).pipe(
+            take(5)).subscribe(mockObs)
+        time.sleep(0.1)
+        print(mockObs.messages)
+        self.assertTrue(len(mockObs.messages) == 6)
+        print(mockObs2.messages)
+        self.assertTrue(len(mockObs2.messages) == 1)
 
 
 if __name__ == "__main__":
