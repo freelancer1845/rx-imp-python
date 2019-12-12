@@ -20,12 +20,13 @@ class RxImpMessage(dict):
             self.id = uuid4().hex
         else:
             self.id = id
-        dict.__init__(self, topic=topic, count=count, rx_state=rx_state,payload=payload,id=self.id)
+        dict.__init__(self, topic=topic, count=count,
+                      rx_state=rx_state, payload=payload, id=self.id)
 
     @staticmethod
     def fromBytes(data):
-        obj = json.loads(data.decode('UTF-16'))
+        obj = json.loads(data.decode('UTF-8'))
         return RxImpMessage(topic=obj['topic'], count=obj['count'], rx_state=obj['rx_state'], payload=obj['payload'], id=obj['id'])
 
     def toBytes(self):
-        return json.dumps(self).encode('UTF-16')
+        return json.dumps(self).encode('UTF-8')
