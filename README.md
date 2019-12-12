@@ -9,7 +9,7 @@ from threading import Thread
 import time
 from rximp import RxImp
 from rx.subject import Subject
-from rx import timer
+from rx import timer, of
 
 _in = Subject()
 _out = Subject()
@@ -51,6 +51,11 @@ if __name__ == "__main__":
     def doStupidThings(x):
         _rxImp.observableCall('stupidTarget',
                               None).subscribe(lambda x: print(x))
+
+    def handleStupidThings(x):
+        return of(x)
+
+    _rxImp.registerCall('stupidTarget', handleStupidThings)
 
     timer(1.0).subscribe(lambda x: doStupidThings(x))
 
