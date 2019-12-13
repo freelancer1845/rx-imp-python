@@ -21,7 +21,7 @@ context = zmq.Context()
 
 socket = context.socket(zmq.PAIR)
 port = "5555"
-socket.bind("tcp://*:5555")
+socket.bind("tcp://*:5555") # on other side do socket.connect("tcp://<ipaddress>:5555")
 
 _in = Subject()
 _out = Subject()
