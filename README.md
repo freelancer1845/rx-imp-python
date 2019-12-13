@@ -1,5 +1,64 @@
 # Python implementation of Rx-Imp
 
+## Other implementations
+
+* [Java](https://github.com/freelancer1845/rx-imp-java)
+* [Javascript/Typescript](https://github.com/freelancer1845/rx-imp-js)
+
+## Example using ZeroMQ (pyzmq)
+
+```python
+
+import zmq
+from rximp import RxImp
+from rx.subject import Subject
+from queue import Queue
+from rx import interval, of
+from rx.operators import timeout
+import time
+
+context = zmq.Context()
+
+socket = context.socket(zmq.PAIR)
+port = "5555"
+socket.bind("tcp://*:5555")
+
+_in = Subject()
+_out = Subject()
+
+_outQueue = Queue()
+
+_out.subscribe(on_next=lambda x: _outQueue.put(x))
+
+_rxImp = RxImp(_in, _out)
+
+_rxImp.registerCall("pingpong", lambda x: of(0))
+
+
+def pingTimeCall():
+    start = time.time()
+    _rxImp.observableCall("pingpong", 0).pipe(timeout(1.0)).subscribe(on_next=lambda x: print(
+        "Ping Time: {}s".format(time.time() - start)), on_error=lambda x: print("Ping Pong Timed out"))
+
+
+interval(1.0).subscribe(lambda x: pingTimeCall())
+
+while True:
+    try:
+        msg = socket.recv(flags=zmq.NOBLOCK)
+        if msg is not None:
+            _in.on_next(msg)
+    except zmq.ZMQError:
+        pass
+
+    if not _outQueue.empty():
+        socket.send(_outQueue.get())
+
+    time.sleep(0.001)
+
+```
+
+
 ## Example using websocket_client library
 
 
