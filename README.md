@@ -1,5 +1,11 @@
 # Python implementation of Rx-Imp
 
+## Install latest version (needs python3 try pip3 install rximp)
+
+```bash
+pip install rximp
+```
+
 ## Other implementations
 
 * [Java](https://github.com/freelancer1845/rx-imp-java)
