@@ -36,17 +36,18 @@ class RxImp(object):
             Topic mapped to this call. Other side must register a handler for this topic first using 'registerCall'
         payload : any
             Payload will be send to the other side in JSON format. May be None!
-        
+
         Returns
         ---------
         Observable : dict
             Observable that will emit items received from the other side. Will also emit termination events
 
         """
-        message = RxImpMessage(
-            topic, 0, RxImpMessage.STATE_SUBSCRIBE, json.dumps(payload))
 
         def subscriptionFunction(observer, scheduler):
+            message = RxImpMessage(
+                topic, 0, RxImpMessage.STATE_SUBSCRIBE, json.dumps(payload))
+
             def isRelevant(msg: RxImpMessage):
                 return msg.rx_state == RxImpMessage.STATE_COMPLETE or msg.rx_state == RxImpMessage.STATE_ERROR or msg.rx_state == RxImpMessage.STATE_NEXT
             self._in.pipe(
@@ -76,7 +77,7 @@ class RxImp(object):
             Topic this call will be registered on
         handler : Callable[[Dict], Observable]
             Handler for this topic. Is called with payload provided by caller (maybe empty). Return an Observable handling this call
-        
+
         Returns
         ---------
         Disposable
