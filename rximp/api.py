@@ -5,6 +5,7 @@ from typing import Callable, Dict
 from rx.operators import map, publish, filter, take_while, replay, do, share, take_until, take, do_action
 import json
 from types import FunctionType
+from threading import Lock
 
 from .message import RxImpMessage
 
@@ -48,21 +49,43 @@ class RxImp(object):
             message = RxImpMessage(
                 topic, 0, RxImpMessage.STATE_SUBSCRIBE, json.dumps(payload))
 
+            publisher: Subject = Subject()
+            lock = Lock()
+            currentCount = 0
+            queue = []
+
+            def orderingSubscriber(msg: RxImpMessage):
+                nonlocal currentCount
+                nonlocal queue
+                with lock:
+                    currentCount += 1
+                    queue.append(msg)
+                    queue.sort(key=lambda x: x.count)
+                    toNext = [msg for msg in queue if msg.count < currentCount]
+                    queue = [msg for msg in queue if msg.count >= currentCount]
+                    for msg in toNext:
+                        publisher.on_next(msg)
+
             def isRelevant(msg: RxImpMessage):
                 return msg.rx_state == RxImpMessage.STATE_COMPLETE or msg.rx_state == RxImpMessage.STATE_ERROR or msg.rx_state == RxImpMessage.STATE_NEXT
-            self._in.pipe(
+
+            secondSubscription: Disposable = self._in.pipe(
                 filter(lambda x: x.id == message.id),
                 filter(lambda x: isRelevant(x)),
                 map(lambda x: self._checkError(x)),
+            ).subscribe(on_next=lambda x: orderingSubscriber(x), on_error=lambda err: publisher.on_error(err))
+
+            subscription: Disposable = publisher.pipe(
                 take_while(lambda x: self._checkNotComplete(x)),
                 map(lambda x: json.loads(x.payload)),
-                share()
             ).subscribe(observer)
             self._out.on_next(message)
 
             def signalUnsubscribe():
                 msg = RxImpMessage(
                     message.topic, 0, RxImpMessage.STATE_DISPOSE, None, id=message.id)
+                secondSubscription.dispose()
+                subscription.dispose()
                 self._out.on_next(msg)
 
             return lambda: signalUnsubscribe()
@@ -84,20 +107,27 @@ class RxImp(object):
             To remove registration
         """
         def handleSubscription(msg: RxImpMessage):
+            currentCount = 0
 
             def on_next(next):
+                nonlocal currentCount
                 nextMsg = RxImpMessage(
-                    topic=msg.topic, count=0, rx_state=RxImpMessage.STATE_NEXT, payload=json.dumps(next), id=msg.id)
+                    topic=msg.topic, count=currentCount, rx_state=RxImpMessage.STATE_NEXT, payload=json.dumps(next), id=msg.id)
+                currentCount += 1
                 self._out.on_next(nextMsg)
 
             def on_error(error):
+                nonlocal currentCount
                 errorMsg = RxImpMessage(
-                    topic=msg.topic, count=0, rx_state=RxImpMessage.STATE_ERROR, payload=json.dumps(error), id=msg.id)
+                    topic=msg.topic, count=currentCount, rx_state=RxImpMessage.STATE_ERROR, payload=json.dumps(error), id=msg.id)
+                currentCount += 1
                 self._out.on_next(errorMsg)
 
             def on_complete():
+                nonlocal currentCount
                 completeMsg = RxImpMessage(
-                    topic=msg.topic, count=0, rx_state=RxImpMessage.STATE_COMPLETE, payload=None, id=msg.id)
+                    topic=msg.topic, count=currentCount, rx_state=RxImpMessage.STATE_COMPLETE, payload=None, id=msg.id)
+                currentCount += 1
                 self._out.on_next(completeMsg)
 
             handler(json.loads(msg.payload)).pipe(

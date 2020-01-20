@@ -1,5 +1,6 @@
 import unittest
 from rximp import RxImp
+from rximp.message import RxImpMessage
 from rx import Observable, of, interval
 from rx.operators import map, do, take, finally_action
 from rx.subject import Subject
@@ -71,6 +72,26 @@ class RxImpTest(unittest.TestCase):
         print(mockObs2.messages)
         self.assertTrue(len(mockObs2.messages) == 1)
 
+    def test_ordersMessages(self):
+        mockObs = MockObserver(scheduler=scheduler)
+        self.outSubject.pipe(
+            map(lambda x: self.rxImp._mapIncoming(x)),
+            map(lambda x: json.loads(x.payload))
+        ).subscribe(mockObs)
+
+        def handleCall(msg):
+
+            nextMsg = RxImpMessage(RxImpTest.TEST_TOPIC, 0, RxImpMessage.STATE_NEXT, 253, msg.id)
+            cmplMsg = RxImpMessage(RxImpTest.TEST_TOPIC, 1, RxImpMessage.STATE_COMPLETE, None, msg.id)
+            self.inSubject(self.rxImp._mapOutgoing(cmplMsg))
+            self.inSubject(self.rxImp._mapOutgoing(nextMsg))
+
+        self.rxImp.observableCall(
+            RxImpTest.TEST_TOPIC, 253).subscribe()
+
+        time.sleep(0.5)
+        self.assertTrue(len(mockObs.messages) == 1)
+        self.assertTrue(mockObs.messages[0].value.value is 253)
 
 if __name__ == "__main__":
     unittest.main()
